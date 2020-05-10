@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from sklearn import datasets
 import sklearn
-
+from tqdm.notebook import tqdm
 
 class Dense:
     compute_type = 'layer'
@@ -24,10 +24,10 @@ class Dense:
         return dZ
 
     def lerelu(self, Z):
-        return np.where(Z > 0, Z, Z * 0.01)
+        return np.where(Z > 0, Z, Z * 0.001)
 
     def lerelu_backward(self, Z):
-        return np.where(Z > 0, 1, 0.01)
+        return np.where(Z > 0, 1, 0.001)
 
     def tanh(self, Z):
         return np.tanh(Z)
@@ -45,9 +45,9 @@ class Dense:
 
     def init_params(self, prev_layer):
         if self.activation != 'relu' and self.activation != 'lerelu':
-            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(1 / int(prev_layer))*0.1
+            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(1 / int(prev_layer))*0.01
         else:
-            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(2 / int(prev_layer))*0.1
+            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(2 / int(prev_layer))*0.01
         self.b = np.zeros((self.neurons, 1))
 
     def set_func_alias(self):
@@ -247,7 +247,7 @@ class FlexModel:
             dAl = self.layers[L - n - 1].backpropagation(dAl, m, learning_rate, optimization, data)
 
     def fit(self, X, y, learning_rate=0.01, batches_size=None, lambd=0, n_iter=1500, printLoss=True, decay_rate=0,
-            optimization='adam', beta1=0.9, beta2=0.999):
+            optimization='adam', beta1=0.9, beta2=0.999, printEvery=10):
         X, y = self.preprocessData(X, y)
         X = np.array(X)
         y = np.array(y)
@@ -275,9 +275,10 @@ class FlexModel:
             prevSize = layer.neurons
 
         progress = []
-        for epoch in range(n_iter):
-            learning_rate_degraded = decay_rate ** epoch * learning_rate
+        for epoch in tqdm(range(n_iter)):
+            learning_rate_degraded = 1/(1+decay_rate * epoch) * learning_rate
             data['epoch'] = epoch
+            loses = []
             for b in range(len(batchesX)):
                 batchX = batchesX[b]
                 batchY = batchesY[b]
@@ -285,12 +286,17 @@ class FlexModel:
 
                 AL = self.forward_propagation(batchX)
                 loss = self.lossF(AL, batchY, m)
-                if printLoss:
-                    print('Epoch %s: %s' % (epoch, loss))
+                loses.append(loss)
                 progress.append(loss)
                 dAL = self.lossFBack(AL, batchY)
                 self.backpropagation(dAL, learning_rate=learning_rate_degraded, m=m, optimization=optimization,
                                      data=data)
+            if printLoss and epoch % printEvery == 0:
+                out = 'Epoch %s: %s' % (epoch, np.mean(loses))
+                if decay_rate != 0:
+                    out += ' | learning rate: %s' % (round(learning_rate_degraded, 5))
+                print(out)
+            loses = []
         return progress
 
     def predict(self, X):
