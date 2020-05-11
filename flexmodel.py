@@ -1,8 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from sklearn import datasets
-import sklearn
 from tqdm.notebook import tqdm
 
 
@@ -38,7 +34,7 @@ class Dense:
 
     def softmax(self, Z):
         A = np.exp(Z)
-        A /= np.sum(A)
+        A /= np.sum(A, axis=0, keepdims=True)
         return A
 
     def softmax_backward(self, Z):
@@ -164,7 +160,7 @@ class Dense:
 
         return dA_prev.copy().astype(np.longdouble)
 
-    def __init__(self, n_neurons=1, activation='tanh', dropout=1, prev_layer=None, batchnorm=False, epsilon=1e-7):
+    def __init__(self, n_neurons=1, activation='tanh', dropout=1, prev_layer=None, batchnorm=False, epsilon=1e-19):
         self.activation = str(activation).lower()
         self.neurons = int(n_neurons)
         self.dropout = np.longdouble(dropout)
@@ -227,12 +223,12 @@ class FlexModel:
         return batches
 
     @staticmethod
-    def normalize_outbreaks(A, min_val=0, max_val=1, eps=1e-12):
+    def normalize_outbreaks(A, min_val=0, max_val=1, eps=1e-15):
         A[A <= min_val] = min_val + eps
         A[A >= max_val] = max_val - eps
         return A
 
-    def cross_entropy_loss(self, A, Y, eps=1e-12):
+    def cross_entropy_loss(self, A, Y, eps=1e-15):
         m = Y.shape[1]
         if len(A[A <= 0]) != 0 or len(A[A >= 1]) != 0:
             A = self.normalize_outbreaks(A, eps=eps)
@@ -240,7 +236,7 @@ class FlexModel:
         cost = np.squeeze(cost)
         return cost
 
-    def d_cross_entropy_loss(self, A, Y, eps=1e-12):
+    def d_cross_entropy_loss(self, A, Y, eps=1e-15):
         if len(A[A <= 0]) != 0 or len(A[A >= 1]) != 0:
             A = self.normalize_outbreaks(A, eps=eps)
         return -np.divide(Y, A) + np.divide(1 - Y, 1 - A)
