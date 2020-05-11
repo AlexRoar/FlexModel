@@ -94,14 +94,15 @@ class Dense:
 
         return dA
 
-    def forward_propagation(self, A_prev):
+    def forward_propagation(self, A_prev, final=False):
         A_prev = A_prev.copy().astype(np.longdouble)
         self.cache['A_prev'] = A_prev
 
         Z = self.w.dot(A_prev) + self.b
         A = self.forwardFunc(Z)
 
-        A = self.perform_dropout(A)
+        if not final:
+            A = self.perform_dropout(A)
 
         self.cache['Z'] = Z
         self.cache['A'] = A
@@ -187,7 +188,6 @@ class Dense:
         if not prev_layer is None:
             self.init_params(prev_layer)
         self.set_func_alias()
-        print(self.epsilon)
 
 
 class FlexModel:
@@ -226,19 +226,29 @@ class FlexModel:
             batches.append(X[:, size * (i + 1):])
         return batches
 
-    def cross_entropy_loss(self, A, Y, m):
+    @staticmethod
+    def normalize_outbreaks(A, min_val=0, max_val=1, eps=1e-12):
+        A[A <= min_val] = min_val + eps
+        A[A >= max_val] = max_val - eps
+        return A
+
+    def cross_entropy_loss(self, A, Y, eps=1e-12):
         m = Y.shape[1]
-        cost = np.sum(Y * np.log(A) + (1 - Y) * np.log(1 - A)) * (-1 / m)
+        if len(A[A <= 0]) != 0 or len(A[A >= 1]) != 0:
+            A = self.normalize_outbreaks(A, eps=eps)
+        cost = np.sum(Y * np.log(A + eps) + (1 - Y) * np.log(1 - A + eps)) * (-1 / m)
         cost = np.squeeze(cost)
         return cost
 
-    def d_cross_entropy_loss(self, A, Y):
+    def d_cross_entropy_loss(self, A, Y, eps=1e-12):
+        if len(A[A <= 0]) != 0 or len(A[A >= 1]) != 0:
+            A = self.normalize_outbreaks(A, eps=eps)
         return -np.divide(Y, A) + np.divide(1 - Y, 1 - A)
 
-    def forward_propagation(self, A):
+    def forward_propagation(self, A, final=False):
         A = A.copy()
         for n, layer in enumerate(self.layers):
-            A = self.layers[n].forward_propagation(A)
+            A = self.layers[n].forward_propagation(A, final=final)
         return A
 
     def backpropagation(self, dAL, learning_rate, m, optimization, data):
@@ -247,18 +257,41 @@ class FlexModel:
         for n, layer in enumerate(self.layers):
             dAl = self.layers[L - n - 1].backpropagation(dAl, m, learning_rate, optimization, data)
 
+    def decayFunc(self, epoch):
+        if self.decay_type == 'exponential':
+            return self.decay_rate ** epoch * self.learning_rate
+        elif self.decay_type == 'hyperbolic':
+            return 1 / (1 + self.decay_rate * epoch) * self.learning_rate
+        elif self.decay_type == 'squared':
+            return self.decay_rate / np.sqrt(epoch) * self.learning_rate
+        elif self.decay_type == None:
+            return self.learning_rate
+        else:
+            raise Exception('Decay type is not defined')
+
     def fit(self, X, y, learning_rate=0.01, batches_size=None, lambd=0, n_iter=1500, printLoss=True, decay_rate=0,
-            optimization='adam', beta1=0.9, beta2=0.999, printEvery=10):
+            optimization='adam', beta1=0.9, beta2=0.999, printEvery=10, decay_type='exponential', eval_set=None,
+            eval_every=10):
         X, y = self.preprocessData(X, y)
         X = np.array(X).astype(np.longdouble)
         y = np.array(y).astype(np.longdouble)
+
         optimization = str(optimization).lower()
+
         learning_rate = np.longdouble(learning_rate)
+        self.learning_rate = learning_rate
+
         lambd = np.longdouble(lambd)
+
         n_iter = int(n_iter)
+
         decay_rate = np.longdouble(decay_rate)
+        self.decay_rate = decay_rate
+        self.decay_type = str(decay_type)
+
         beta1 = np.longdouble(beta1)
         beta2 = np.longdouble(beta2)
+
         data = {'beta': beta1, 'beta1': beta1, 'beta2': beta2}
 
         if batches_size is None:
@@ -275,9 +308,13 @@ class FlexModel:
             self.layers[n].lambd = lambd
             prevSize = layer.neurons
 
-        progress = []
-        for epoch in tqdm(range(n_iter)):
-            learning_rate_degraded = 1 / (1 + decay_rate * epoch) * learning_rate
+        if eval_set is not None:
+            eval_X, eval_Y = self.preprocessData(eval_set[0], eval_set[1])
+
+        progress = [[],[]]
+        progressEval = [[],[]]
+        for epoch in tqdm(range(1, n_iter + 1)):
+            learning_rate_degraded = self.decayFunc(epoch)
             data['epoch'] = epoch
             loses = []
             for b in range(len(batchesX)):
@@ -286,23 +323,38 @@ class FlexModel:
                 m = batchX.shape[1]
 
                 AL = self.forward_propagation(batchX)
-                loss = self.lossF(AL, batchY, m)
+                loss = self.lossF(AL, batchY)
                 loses.append(loss)
-                progress.append(loss)
+
                 dAL = self.lossFBack(AL, batchY)
                 self.backpropagation(dAL, learning_rate=learning_rate_degraded, m=m, optimization=optimization,
                                      data=data)
+            progress[0].append(epoch)
+            progress[1].append(np.mean(loses))
+
+            if epoch % eval_every == 0 and eval_set is not None:
+                eval_pred = self.forward_propagation(eval_X)
+                lossEval = self.lossF(eval_pred, eval_Y)
+                progressEval[0].append(epoch)
+                progressEval[1].append(lossEval)
             if printLoss and epoch % printEvery == 0:
                 out = 'Epoch %s: %s' % (epoch, np.mean(loses))
                 if decay_rate != 0:
                     out += ' | learning rate: %s' % (round(learning_rate_degraded, 5))
+                if eval_set is not None:
+                    eval_pred = self.forward_propagation(eval_X)
+                    lossEval = self.lossF(eval_pred, eval_Y)
+                    out += ' | eval loss: %s' % (lossEval)
                 print(out)
-        return progress
+        if eval_set is None:
+            return progress
+        else:
+            return progress, progressEval
 
     def predict(self, X):
         X, _ = self.preprocessData(X, None)
         X = np.array(X)
-        return self.forward_propagation(X)
+        return self.forward_propagation(X, final=True)
 
     def accuracy(self, A, Y):
         corr = 0
