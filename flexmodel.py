@@ -48,7 +48,8 @@ class Dense:
             self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(1 / int(prev_layer))*0.01
         else:
             self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(2 / int(prev_layer))*0.01
-        self.b = np.zeros((self.neurons, 1))
+        self.w = self.w.astype(np.longlong)
+        self.b = np.zeros((self.neurons, 1)).astype(np.longlong)
 
     def set_func_alias(self):
         if self.activation == 'tanh':
@@ -93,7 +94,7 @@ class Dense:
         return dA
 
     def forward_propagation(self, A_prev):
-        A_prev = A_prev.copy()
+        A_prev = A_prev.copy().astype(np.longlong)
         self.cache['A_prev'] = A_prev
 
         Z = self.w.dot(A_prev) + self.b
@@ -106,7 +107,7 @@ class Dense:
         return A.copy()
 
     def backpropagation(self, dA, m, learning_rate, optimization, data):
-        dA = dA.copy()
+        dA = dA.copy().astype(np.longlong)
         dA = self.perform_dropout_back(dA)
         dZ = dA * self.backFunc(self.cache['Z'])
 
@@ -159,9 +160,9 @@ class Dense:
         dW += self.lambd / m * self.w
 
         dA_prev = np.dot(self.w.T, dZ)
-        self.w = self.w - learning_rate * dW
-        self.b = self.b - learning_rate * db
-        return dA_prev.copy()
+        self.w -= learning_rate * dW
+        self.b -= self.b - learning_rate * db
+        return dA_prev.copy().astype(np.longlong)
 
     def __init__(self, n_neurons=1, activation='tanh', dropout=1, prev_layer=None, batchnorm=False, epsilon=1e-10):
         self.activation = str(activation).lower()
@@ -249,8 +250,8 @@ class FlexModel:
     def fit(self, X, y, learning_rate=0.01, batches_size=None, lambd=0, n_iter=1500, printLoss=True, decay_rate=0,
             optimization='adam', beta1=0.9, beta2=0.999, printEvery=10):
         X, y = self.preprocessData(X, y)
-        X = np.array(X)
-        y = np.array(y)
+        X = np.array(X).astype(np.longlong)
+        y = np.array(y).astype(np.longlong)
         optimization = str(optimization).lower()
         learning_rate = float(learning_rate)
         lambd = float(lambd)
@@ -296,7 +297,6 @@ class FlexModel:
                 if decay_rate != 0:
                     out += ' | learning rate: %s' % (round(learning_rate_degraded, 5))
                 print(out)
-            loses = []
         return progress
 
     def predict(self, X):
