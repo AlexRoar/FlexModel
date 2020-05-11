@@ -38,7 +38,8 @@ class Dense:
         return A
 
     def softmax_backward(self, Z):
-        return self.sigmoid_backward(Z)
+        s = Z.reshape(-1, 1)
+        return np.diagflat(s) - np.dot(s, s.T)
 
     def init_params(self, prev_layer):
         if self.activation != 'relu' and self.activation != 'lerelu':
