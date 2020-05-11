@@ -32,6 +32,12 @@ class Dense:
     def tanh_backward(self, Z):
         return 1 - np.power(self.tanh(Z), 2)
 
+    def linear(self, Z):
+        return Z
+
+    def linear_backward(self, Z):
+        return 1
+
     def softmax(self, Z):
         A = np.exp(Z)
         A /= np.sum(A, axis=0, keepdims=True)
@@ -64,6 +70,10 @@ class Dense:
         elif self.activation == 'softmax':
             self.forwardFunc = self.softmax
             self.backFunc = self.softmax_backward
+        elif self.activation == 'linear':
+            self.forwardFunc = self.linear
+            self.backFunc = self.linear_backward
+
 
     def perform_dropout(self, A):
         if self.dropout >= 1:
