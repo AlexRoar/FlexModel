@@ -5,6 +5,7 @@ from sklearn import datasets
 import sklearn
 from tqdm.notebook import tqdm
 
+
 class Dense:
     compute_type = 'layer'
 
@@ -45,11 +46,11 @@ class Dense:
 
     def init_params(self, prev_layer):
         if self.activation != 'relu' and self.activation != 'lerelu':
-            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(1 / int(prev_layer))*0.01
+            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(1 / int(prev_layer)) * 0.01
         else:
-            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(2 / int(prev_layer))*0.01
-        self.w = self.w.astype(np.longlong)
-        self.b = np.zeros((self.neurons, 1)).astype(np.longlong)
+            self.w = np.random.randn(self.neurons, int(prev_layer)) * np.sqrt(2 / int(prev_layer)) * 0.01
+        self.w = self.w.astype(np.longdouble)
+        self.b = np.zeros((self.neurons, 1)).astype(np.longdouble)
 
     def set_func_alias(self):
         if self.activation == 'tanh':
@@ -94,7 +95,7 @@ class Dense:
         return dA
 
     def forward_propagation(self, A_prev):
-        A_prev = A_prev.copy().astype(np.longlong)
+        A_prev = A_prev.copy().astype(np.longdouble)
         self.cache['A_prev'] = A_prev
 
         Z = self.w.dot(A_prev) + self.b
@@ -107,7 +108,7 @@ class Dense:
         return A.copy()
 
     def backpropagation(self, dA, m, learning_rate, optimization, data):
-        dA = dA.copy().astype(np.longlong)
+        dA = dA.copy().astype(np.longdouble)
         dA = self.perform_dropout_back(dA)
         dZ = dA * self.backFunc(self.cache['Z'])
 
@@ -118,12 +119,11 @@ class Dense:
         assert (self.b.shape == db.shape)
 
         dW += self.lambd / m * self.w
-
+        t = data['epoch'] + 1
         if optimization == None:
             pass
         elif optimization == 'momentum':
             beta = data['beta']
-            t = data['epoch'] + 1
 
             self.vdw = beta * self.vdw + (1 - beta) * dW
             self.vdb = beta * self.vdb + (1 - beta) * db
@@ -132,7 +132,6 @@ class Dense:
             db = self.vdb / (1 - beta ** t)
         elif optimization == 'rmsprop':
             beta = data['beta']
-            t = data['epoch'] + 1
 
             self.sdw = beta * self.sdw + (1 - beta) * dW * dW
             self.sdb = beta * self.sdb + (1 - beta) * db * db
@@ -142,45 +141,45 @@ class Dense:
         elif optimization == 'adam':
             beta1 = data['beta1']
             beta2 = data['beta2']
-            t = data['epoch'] + 1
 
-            self.vdw = beta1 * self.vdw + (1 - beta1) * dW
-            self.vdb = beta1 * self.vdb + (1 - beta1) * db
-            self.sdw = beta2 * self.sdw + (1 - beta2) * dW * dW
-            self.sdb = beta2 * self.sdb + (1 - beta2) * db * db
+            self.vdw = np.longdouble(beta1 * self.vdw + (1 - beta1) * dW)
+            self.vdb = np.longdouble(beta1 * self.vdb + (1 - beta1) * db)
+            self.sdw = np.longdouble(beta2 * self.sdw + (1 - beta2) * dW * dW)
+            self.sdb = np.longdouble(beta2 * self.sdb + (1 - beta2) * db * db)
 
-            vdw_corr = self.vdw / (1 - beta1 ** t)
-            vdb_corr = self.vdb / (1 - beta1 ** t)
-            sdw_corr = self.sdw / (1 - beta2 ** t)
-            sdb_corr = self.sdb / (1 - beta2 ** t)
+            vdw_corr = np.longdouble(self.vdw / (1 - beta1 ** t))
+            vdb_corr = np.longdouble(self.vdb / (1 - beta1 ** t))
+            sdw_corr = np.longdouble(self.sdw / (1 - beta2 ** t))
+            sdb_corr = np.longdouble(self.sdb / (1 - beta2 ** t))
 
-            dW = vdw_corr / (np.sqrt(sdw_corr) + self.epsilon)
-            db = vdb_corr / (np.sqrt(sdb_corr) + self.epsilon)
+            dW = np.longdouble(vdw_corr) / np.longdouble(np.sqrt(sdw_corr) + self.epsilon)
+            db = np.longdouble(vdb_corr) / np.longdouble(np.sqrt(sdb_corr) + self.epsilon)
 
         dW += self.lambd / m * self.w
 
         dA_prev = np.dot(self.w.T, dZ)
-        self.w -= learning_rate * dW
-        self.b -= self.b - learning_rate * db
-        return dA_prev.copy().astype(np.longlong)
+        self.w = np.subtract(np.longdouble(self.w), np.longdouble(learning_rate * dW))
+        self.b = np.subtract(np.longdouble(self.b), np.longdouble(learning_rate * db))
 
-    def __init__(self, n_neurons=1, activation='tanh', dropout=1, prev_layer=None, batchnorm=False, epsilon=1e-10):
+        return dA_prev.copy().astype(np.longdouble)
+
+    def __init__(self, n_neurons=1, activation='tanh', dropout=1, prev_layer=None, batchnorm=False, epsilon=1e-7):
         self.activation = str(activation).lower()
         self.neurons = int(n_neurons)
-        self.dropout = float(dropout)
+        self.dropout = np.longdouble(dropout)
         self.batchnorm = batchnorm
-        self.epsilon = epsilon
+        self.epsilon = np.longdouble(epsilon)
         self.lambd = 0
-        self.w = np.array([])
-        self.b = np.array([])
+        self.w = np.array([]).astype(np.longdouble)
+        self.b = np.array([]).astype(np.longdouble)
 
         self.cache = {}
 
-        self.vdw = 0
-        self.vdb = 0
+        self.vdw = np.longdouble(0)
+        self.vdb = np.longdouble(0)
 
-        self.sdw = 0
-        self.sdb = 0
+        self.sdw = np.longdouble(0)
+        self.sdb = np.longdouble(0)
 
         self.forwardFunc = None
         self.backFunc = None
@@ -188,6 +187,7 @@ class Dense:
         if not prev_layer is None:
             self.init_params(prev_layer)
         self.set_func_alias()
+        print(self.epsilon)
 
 
 class FlexModel:
@@ -250,15 +250,15 @@ class FlexModel:
     def fit(self, X, y, learning_rate=0.01, batches_size=None, lambd=0, n_iter=1500, printLoss=True, decay_rate=0,
             optimization='adam', beta1=0.9, beta2=0.999, printEvery=10):
         X, y = self.preprocessData(X, y)
-        X = np.array(X).astype(np.longlong)
-        y = np.array(y).astype(np.longlong)
+        X = np.array(X).astype(np.longdouble)
+        y = np.array(y).astype(np.longdouble)
         optimization = str(optimization).lower()
-        learning_rate = float(learning_rate)
-        lambd = float(lambd)
+        learning_rate = np.longdouble(learning_rate)
+        lambd = np.longdouble(lambd)
         n_iter = int(n_iter)
-        decay_rate = float(decay_rate)
-        beta1 = float(beta1)
-        beta2 = float(beta2)
+        decay_rate = np.longdouble(decay_rate)
+        beta1 = np.longdouble(beta1)
+        beta2 = np.longdouble(beta2)
         data = {'beta': beta1, 'beta1': beta1, 'beta2': beta2}
 
         if batches_size is None:
@@ -277,7 +277,7 @@ class FlexModel:
 
         progress = []
         for epoch in tqdm(range(n_iter)):
-            learning_rate_degraded = 1/(1+decay_rate * epoch) * learning_rate
+            learning_rate_degraded = 1 / (1 + decay_rate * epoch) * learning_rate
             data['epoch'] = epoch
             loses = []
             for b in range(len(batchesX)):
